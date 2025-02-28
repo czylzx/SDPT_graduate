@@ -1,10 +1,11 @@
 /****************************************************************************
 this hpp implements the SDPT functionality 
 *****************************************************************************/
-#ifndef SDPT_HPP_
-#define SDPT_HPP_
+#ifndef SDPT_UTXO_HPP_
+#define SDPT_UTXO_HPP_
 
 #include "../pke/exponential_elgamal.hpp"        // implement ElGamal  PKE
+#include "../pke/twisted_exponential_elgamal.hpp"        // implement twisted ElGamal  PKE
 #include "../zkp/bulletproofs/sigma_bullet_proof.hpp"    // implement Log Size Bulletproof
 #include "../zkp/nizk/nizk_many_out_of_many.hpp" // implement many out of many proof
 #include "../zkp/nizk/nizk_plaintext_bit_equality.hpp" // NIZKPoK for plaintext bit equality
@@ -15,7 +16,7 @@ this hpp implements the SDPT functionality
 //#define DEBUG        // show debug information 
 
 
-namespace SDPT{
+namespace SDPT_UTXO{
 
 using Serialization::operator<<; 
 using Serialization::operator>>; 
