@@ -204,6 +204,10 @@ TARGET_LINK_LIBRARIES(test_sdpt ${OPENSSL_LIBRARIES} OpenMP::OpenMP_CXX)
 ADD_EXECUTABLE(test_any_out_of_many test/test_any_out_of_many.cpp)
 TARGET_LINK_LIBRARIES(test_any_out_of_many ${OPENSSL_LIBRARIES} OpenMP::OpenMP_CXX)
 
+# privacy-preserving cryptocurrency
+ADD_EXECUTABLE(test_sdpt_UTXO test/test_sdpt_UTXO.cpp)
+TARGET_LINK_LIBRARIES(test_sdpt_UTXO ${OPENSSL_LIBRARIES} OpenMP::OpenMP_CXX)
+
 # mcl
 # add_executable(test_mcl test/test_mcl.cpp)
 # target_link_libraries(test_mcl libmcl.a libgmp.a)
