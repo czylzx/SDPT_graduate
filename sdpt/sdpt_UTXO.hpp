@@ -405,6 +405,10 @@ AnonTransaction CreateAnonTransaction(PP &pp, std::vector<Account> &Acct_sender,
     }
     Solvent4UTXO::Witness solvent_witness;
     solvent_witness.vec_s = sk_sender;
+    for(auto i = 0; i < solvent_witness.vec_s.size(); i++)
+    {
+        solvent_witness.vec_s[i].Print("solvent_witness.vec_s[i]");
+    }
     solvent_witness.vec_r_coin_output = vec_r_coin_output;
     solvent_witness.vec_r_coin_input.resize(Acct_sender.size());
     //compute bit vector
@@ -421,6 +425,23 @@ AnonTransaction CreateAnonTransaction(PP &pp, std::vector<Account> &Acct_sender,
             if(anon_transaction.input[i].pk == Acct_sender[index_j].pk)
             {
                 vec_b[i] = bn_1;
+                Acct_sender[index_j].sk.Print("Acct_sender[index_j].sk");
+                if(pp.enc_part.g*Acct_sender[index_j].sk == anon_transaction.input[i].pk)
+                {
+                    std::cout << "the sender's secret key is correct" << std::endl;
+                }
+                else
+                {
+                    std::cout << "the sender's secret key is wrong" << std::endl;
+                }
+                if(solvent_instance.vec_com[i]==anon_transaction.input[i].pk)
+                {
+                    std::cout << "the sender's public key is correct" << std::endl;
+                }
+                else
+                {
+                    std::cout << "the sender's public key is wrong" << std::endl;
+                }
                 index_j++;
             }
             else

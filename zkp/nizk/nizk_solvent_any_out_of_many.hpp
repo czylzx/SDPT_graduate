@@ -1,7 +1,7 @@
 /***********************************************************************************
 this hpp implements many_out_of_many proof and adopts the aadcp
 ***********************************************************************************/
-#ifndef Any_OUT_OF_MANY_HPP_
+#ifndef ANy_OUT_OF_MANY_HPP_
 #define ANY_OUT_OF_MANY_HPP_
 #include "../../crypto/ec_point.hpp"
 #include "../../crypto/hash.hpp"
@@ -10,7 +10,7 @@ this hpp implements many_out_of_many proof and adopts the aadcp
 #include "../bulletproofs/innerproduct_proof.hpp" 
 #include <utility>
 #include <iostream>
-#define DEBUG        // show debug information 
+#define DEBUG
 //!!!!!!!!!!!!!!!! if you want to invoke the Bulletproofs, must note taux and tx's order ! The order is reversed !!
 
 namespace Solvent4UTXO{
@@ -50,9 +50,9 @@ std::ifstream &operator>>(std::ifstream &fin, PP& pp)
 struct Instance
 {
     std::vector<ECPoint> vec_com;// the vector of the commitment, in APGC, it may refer to the pk or the elgamal cipher.
+    //BigInt k;
     std::vector<ECPoint> CoinInput;
     std::vector<ECPoint> CoinOutput;
-    //BigInt k;
 };
 struct Witness
 {
@@ -127,7 +127,6 @@ PP Setup(size_t com_len, ECPoint g, ECPoint h)
 
 void Prove(PP &pp,Instance &instance, Witness &witness, Proof &proof , std::string &transcript_str)
 {
-    
     auto start_time = std::chrono::steady_clock::now();
 
     size_t LEN = pp.com_len;
@@ -240,7 +239,6 @@ void Prove(PP &pp,Instance &instance, Witness &witness, Proof &proof , std::stri
     proof.E = ECPointVectorMul(instance.vec_com, poly_ll1); // E = \prod_{i=1}^{n} P_i^{{y^N} \circ b_i}
     BigInt rs = GenRandomBigIntLessThan(order);
     proof.E = proof.E + pp.g * (-rs); // E = E + com(0, -rs)
-    //proof.E = proof.E + ECPointVectorMul(instance.CoinInput, vec_sL); // E = E + C^{r0} 
 
     // compute taux
     proof.taux = (tau1 * x + tau2 * x_square) % order; //proof.taux = tau2*x_square + tau1*x; 
@@ -267,17 +265,7 @@ void Prove(PP &pp,Instance &instance, Witness &witness, Proof &proof , std::stri
         PrintBigIntVector(witness.vec_b, "witness.vec_b");
         std::cout<<"j = "<<j<<std::endl;
     }
-    BigInt diff_r = bn_0;
-    auto len_r_input=witness.vec_r_coin_input.size();
-    for(auto i=0;i<len_r_input;i++){
-        diff_r=(diff_r+witness.vec_r_coin_input[i]) % order;
-    }
-    auto len_r_output=witness.vec_r_coin_output.size();
-    for(auto i=0;i<len_r_output;i++){
-        diff_r=(diff_r-witness.vec_r_coin_output[i] + order) % order;
-    }  
-    //proof.fs = (rs * x + proof.fs + diff_r) % order;
-    proof.fs = (rs * x + proof.fs ) % order;
+    proof.fs = (rs * x + proof.fs) % order;
 
     // transmit llx and rrx via inner product proof
     InnerProduct::PP ip_pp = InnerProduct::Setup(LEN, false); 
@@ -368,16 +356,14 @@ bool Verify(PP &pp, Instance &instance, Proof &proof, std::string &transcript_st
     BigInt bn_temp1 = BigIntVectorModInnerProduct(vec_1_power, vec_y_power, BigInt(order)); 
     BigInt bn_c0 = z.ModSub(z_square, order); // z
     bn_temp1 = bn_c0 * bn_temp1 % order; 
-    BigInt delta_yz = (bn_temp1 + order)  % order; 
-    //delta_yz = (delta_yz + order ) % order;
+    //BigInt delta_yz = bn_temp1 - z_cubic * BigInt(LEN) % order; 
+    BigInt delta_yz = (bn_temp1 + order)  % order;
 
     // check  
     ECPoint LEFT = pp.g * proof.tx + pp.h * proof.taux;  // LEFT = g^{\taux} h^\hat{t}
 
     std::vector<ECPoint> vec_A(3);
     std::vector<BigInt> vec_a(3);
-    // vec_A[0] = pp.g, vec_A[1] = proof.T1, vec_A[2] = proof.T2, vec_A[3] = pp.g;
-    // vec_a[0] = delta_yz, vec_a[1] = x, vec_a[2] = x_square, vec_a[3] = z_square * instance.k % order;
     vec_A[0] = pp.g, vec_A[1] = proof.T1, vec_A[2] = proof.T2;
     vec_a[0] = delta_yz, vec_a[1] = x, vec_a[2] = x_square;
 
@@ -396,12 +382,10 @@ bool Verify(PP &pp, Instance &instance, Proof &proof, std::string &transcript_st
     std::vector<BigInt> vec_y_inverse_power = GenBigIntPowerVector(LEN, y_inverse); // y^n
     std::vector<ECPoint> com_new(LEN);
     std::vector<ECPoint> vec_g_new(LEN);
-    std::vector<ECPoint> vec_A_coin_input = ECPointVectorProduct(instance.CoinInput, vec_y_inverse_power);  // ip_pp.vec_g = vec_g_new
     com_new.assign(instance.vec_com.begin(), instance.vec_com.end());
     ip_pp.vec_g = ECPointVectorProduct(ip_pp.vec_g, vec_y_inverse_power);  // ip_pp.vec_g = vec_g_new
     vec_g_new = ip_pp.vec_g;
     ip_pp.vec_g = ECPointVectorAdd(ip_pp.vec_g, com_new); // ip_pp.vec_g = vec_g_new + com_new
-    //ip_pp.vec_g = ECPointVectorAdd(ip_pp.vec_g, vec_A_coin_input); // ip_pp.vec_g = vec_g_new + com_new + com_input
 
     InnerProduct::Instance ip_instance;
     ip_pp.u = pp.u * e; // u = u^e 
@@ -410,8 +394,6 @@ bool Verify(PP &pp, Instance &instance, Proof &proof, std::string &transcript_st
     std::copy(pp.vec_g.begin(), pp.vec_g.end(), vec_A.begin());
     std::copy(pp.vec_h.begin(), pp.vec_h.end(), vec_A.begin()+ip_pp.VECTOR_LEN);
     std::copy(instance.vec_com.begin(), instance.vec_com.end(), vec_A.begin()+2*ip_pp.VECTOR_LEN);
-    //std::copy(instance.CoinInput.begin(), instance.CoinInput.end(), vec_A.begin()+3*ip_pp.VECTOR_LEN);
-    
 
     vec_A[3*ip_pp.VECTOR_LEN] = proof.A; 
     vec_A[3*ip_pp.VECTOR_LEN+1] = proof.S; 
@@ -432,7 +414,6 @@ bool Verify(PP &pp, Instance &instance, Proof &proof, std::string &transcript_st
     std::move(vec_z_minus_unary.begin(), vec_z_minus_unary.end(), vec_a.begin());
     std::move(vec_z.begin(), vec_z.end(), vec_a.begin() + ip_pp.VECTOR_LEN); // LEFT += g^{1 z^n}
     std::move(vec_zz_P.begin(), vec_zz_P.end(), vec_a.begin()+2*ip_pp.VECTOR_LEN); 
-    //std::move(vec_z_minus_unary.begin(), vec_z_minus_unary.end(), vec_a.begin()+3*ip_pp.VECTOR_LEN);
      
     vec_a[3*ip_pp.VECTOR_LEN] = bn_1; 
     vec_a[3*ip_pp.VECTOR_LEN+1] = x; 
@@ -441,12 +422,7 @@ bool Verify(PP &pp, Instance &instance, Proof &proof, std::string &transcript_st
     vec_a[3*ip_pp.VECTOR_LEN+4] = x;
 
     ip_instance.P = ECPointVectorMul(vec_A, vec_a);  // set P_new = A + S^x + h^{-mu} u^tx  
-    ECPoint sum_output;
-    size_t len_r_output = instance.CoinOutput.size();
-    for(auto i = 0; i < len_r_output; i++){
-        sum_output = sum_output + instance.CoinOutput[i];
-    }
-    ip_instance.P = ip_instance.P + ip_pp.u * proof.tx; 
+    ip_instance.P = ip_instance.P + ip_pp.u * proof.tx; // P_new = P_new + E
     
     vec_condition[1] = InnerProduct::Verify(ip_pp, ip_instance, transcript_str, proof.ip_proof); 
 
