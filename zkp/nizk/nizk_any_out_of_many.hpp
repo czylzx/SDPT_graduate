@@ -50,7 +50,7 @@ std::ifstream &operator>>(std::ifstream &fin, PP& pp)
 struct Instance
 {
     std::vector<ECPoint> vec_com;// the vector of the commitment, in APGC, it may refer to the pk or the elgamal cipher.
-    BigInt k;
+    //BigInt k;
 };
 struct Witness
 {
@@ -192,8 +192,8 @@ void Prove(PP &pp,Instance &instance, Witness &witness, Proof &proof , std::stri
 
     // compute r(X)     
     std::vector<BigInt> poly_rr0 = BigIntVectorModAdd(vec_aR, vec_z_unary, BigInt(order)); // aR + z1^n
-    std::vector<BigInt> vec_zz_temp_y_inverse = BigIntVectorModScalar(vec_y_inverse_power, z_square, BigInt(order));
-    poly_rr0 = BigIntVectorModAdd(poly_rr0, vec_zz_temp_y_inverse, BigInt(order)); // aR + z1^n + z^2 y^{-i+1}
+    // std::vector<BigInt> vec_zz_temp_y_inverse = BigIntVectorModScalar(vec_y_inverse_power, z_square, BigInt(order));
+    // poly_rr0 = BigIntVectorModAdd(poly_rr0, vec_zz_temp_y_inverse, BigInt(order)); // aR + z1^n + z^2 y^{-i+1}
     
     std::vector<BigInt> poly_rr1(LEN);
     poly_rr1.assign(vec_sR.begin(), vec_sR.end());
@@ -352,16 +352,16 @@ bool Verify(PP &pp, Instance &instance, Proof &proof, std::string &transcript_st
     BigInt bn_temp1 = BigIntVectorModInnerProduct(vec_1_power, vec_y_power, BigInt(order)); 
     BigInt bn_c0 = z.ModSub(z_square, order); // z
     bn_temp1 = bn_c0 * bn_temp1 % order; 
-    BigInt delta_yz = bn_temp1 - z_cubic * BigInt(LEN) % order; 
-    delta_yz = (delta_yz + order ) % order;
+    //BigInt delta_yz = bn_temp1 - z_cubic * BigInt(LEN) % order; 
+    BigInt delta_yz = (bn_temp1 + order)  % order;
 
     // check  
     ECPoint LEFT = pp.g * proof.tx + pp.h * proof.taux;  // LEFT = g^{\taux} h^\hat{t}
 
-    std::vector<ECPoint> vec_A(4);
-    std::vector<BigInt> vec_a(4);
-    vec_A[0] = pp.g, vec_A[1] = proof.T1, vec_A[2] = proof.T2, vec_A[3] = pp.g;
-    vec_a[0] = delta_yz, vec_a[1] = x, vec_a[2] = x_square, vec_a[3] = z_square * instance.k % order;
+    std::vector<ECPoint> vec_A(3);
+    std::vector<BigInt> vec_a(3);
+    vec_A[0] = pp.g, vec_A[1] = proof.T1, vec_A[2] = proof.T2;
+    vec_a[0] = delta_yz, vec_a[1] = x, vec_a[2] = x_square;
 
     ECPoint RIGHT = ECPointVectorMul(vec_A, vec_a);  // RIGHT =  g^{\delta_yz} T_1^x T_2^{x^2} 
 
@@ -404,8 +404,8 @@ bool Verify(PP &pp, Instance &instance, Proof &proof, std::string &transcript_st
     std::vector<BigInt> vec_z(LEN, z);
     std::vector<BigInt> vec_rr = BigIntVectorModScalar(vec_y_power, z, BigInt(order)); // z y^n
     std::vector<BigInt> vec_zz_P = BigIntVectorModScalar(vec_y_power, z_minus, BigInt(order)); // -z y^n
-    std::vector<BigInt> vec_z_plus = BigIntVectorModScalar(vec_y_inverse_power, z_square, BigInt(order)); 
-    vec_z = BigIntVectorModAdd(vec_z, vec_z_plus, BigInt(order)); // z + z^2 y^{-i+1}
+    //std::vector<BigInt> vec_z_plus = BigIntVectorModScalar(vec_y_inverse_power, z_square, BigInt(order)); 
+    //vec_z = BigIntVectorModAdd(vec_z, vec_z_plus, BigInt(order)); // z + z^2 y^{-i+1}
 
     std::move(vec_z_minus_unary.begin(), vec_z_minus_unary.end(), vec_a.begin());
     std::move(vec_z.begin(), vec_z.end(), vec_a.begin() + ip_pp.VECTOR_LEN); // LEFT += g^{1 z^n}

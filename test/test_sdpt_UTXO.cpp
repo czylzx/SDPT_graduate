@@ -2,7 +2,7 @@
 #include "../crypto/setup.hpp"
 // count the number of transaction
 BigInt count=bn_0;
-void Build_SDPT_Test_Enviroment(size_t ringnumber)
+void Build_SDPT_Test_Enviroment(size_t ringnumber, size_t num_receiver)
 {
     PrintSplitLine('-'); 
     std::cout << "build test enviroment for SDPT_UTXO >>>" << std::endl; 
@@ -17,7 +17,7 @@ void Build_SDPT_Test_Enviroment(size_t ringnumber)
     SDPT_UTXO::SP sp;
     SDPT_UTXO::PP pp;
 
-    std::tie(pp, sp) = SDPT_UTXO::Setup(LOG_MAXIMUM_COINS, AnonySetSize); 
+    std::tie(pp, sp) = SDPT_UTXO::Setup(LOG_MAXIMUM_COINS, AnonySetSize, num_receiver); 
 
     SDPT_UTXO::Initialize(pp);
 
@@ -221,7 +221,6 @@ void Emulate_SDPT_System(size_t ringnumber, size_t num_sender, size_t num_receiv
     std::set<size_t> senderindex;
     for(auto i = 0; ; i++)
     {
-        srand(time(0));
         size_t index = SDPT_UTXO::getranindex(ringnumber);
         if(senderindex.find(index) == senderindex.end())
         {
@@ -232,13 +231,14 @@ void Emulate_SDPT_System(size_t ringnumber, size_t num_sender, size_t num_receiv
             break;
         }
     }
-    std::vector<size_t> senderindexlist(senderindex.begin(), senderindex.end());
-    std::sort(senderindexlist.begin(), senderindexlist.end());
+    // std::vector<size_t> senderindexlist(senderindex.begin(), senderindex.end());
+    // std::sort(senderindexlist.begin(), senderindexlist.end());
     std::vector<SDPT_UTXO::Account> senderlist;
     size_t j = 0;
     AnonSetList.resize(ringnumber);
-    std::vector<BigInt> v;
+    std::vector<BigInt> v ;
     std::vector<BigInt> sk_sender;
+    std::vector<BigInt> vec_b(ringnumber);
     for(auto i = 0; i < ringnumber; i++)
     {
         if(senderindex.find(i) != senderindex.end())
@@ -246,19 +246,28 @@ void Emulate_SDPT_System(size_t ringnumber, size_t num_sender, size_t num_receiv
             senderlist.push_back(acountlist[i]); 
             sk_sender.push_back(acountlist[i].sk);
             v.push_back(acountlist[i].m);
+            vec_b[i] = bn_1;
+        }
+        else
+        {
+            vec_b[i] = bn_0;
         }
         AnonSetList[i].pk = acountlist[i].pk;
         AnonSetList[i].coin_tx = acountlist[i].coin_ct;
     }
+    PrintBigIntVector(vec_b, "vec_b");
     std::vector<ECPoint> pk_receiver(num_receiver);
     //generate the  random receiver pk
     for(auto i = 0; i < num_receiver; i++)
     {
        std::tie(pk_receiver[i], std::ignore) = TwistedExponentialElGamal::KeyGen(pp.enc_part);
     }
+    std::cout << "begin to create anonymous transaction" << std::endl;
     SDPT_UTXO::AnonTransaction anon_transaction = SDPT_UTXO::CreateAnonTransaction(pp, senderlist, v, pk_receiver, AnonSetList, sk_sender, count);
    
-
+    std::cout << "begin to mine" << std::endl;
+    SDPT_UTXO::Miner(pp, anon_transaction);
+    PrintSplitLine('-');
 }
 
 int main()
@@ -269,7 +278,7 @@ int main()
     size_t ringnumber=8;
     size_t num_sender=2;
     size_t num_receiver=2;
-    Build_SDPT_Test_Enviroment(ringnumber); 
+    Build_SDPT_Test_Enviroment(ringnumber,num_receiver); 
     Emulate_SDPT_System(ringnumber, num_sender, num_receiver);
     CRYPTO_Finalize(); 
 

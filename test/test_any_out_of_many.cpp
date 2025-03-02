@@ -24,7 +24,7 @@ void test_any_out_of_many(size_t N_max, size_t N_sender)
   
     std::vector<BigInt> vec_s(N_sender);
     std::vector<BigInt> vec_b(N_max);
-    instance.k = BigInt(N_sender);
+    //instance.k = BigInt(N_sender);
 
     size_t sum_b = 0;
     for(auto i = 0; i < N_max; i++)

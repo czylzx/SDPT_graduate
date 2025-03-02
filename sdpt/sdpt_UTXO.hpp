@@ -12,7 +12,7 @@ this hpp implements the SDPT functionality
 #include "../utility/serialization.hpp"
 #include <time.h>
 #define DEMO           // demo mode 
-//#define DEBUG        // show debug information 
+// #define DEBUG        // show debug information 
 
 
 namespace SDPT_UTXO{
@@ -262,7 +262,7 @@ void FetchAnonyTx(AnonTransaction &anon_transaction, std::string sdpt_anontx_fil
 
 
 /* This function implements Setup algorithm of SDPT */
-std::tuple<PP, SP> Setup(size_t LOG_MAXIMUM_COINS, size_t anonset_num)
+std::tuple<PP, SP> Setup(size_t LOG_MAXIMUM_COINS, size_t anonset_num, size_t num_receiver)
 {
     PP pp; 
     SP sp; 
@@ -273,7 +273,7 @@ std::tuple<PP, SP> Setup(size_t LOG_MAXIMUM_COINS, size_t anonset_num)
     }  
     pp.MAXIMUM_COINS = BigInt(uint64_t(pow(2, LOG_MAXIMUM_COINS)));  
     pp.anonset_num = anonset_num;
-    size_t MAX_AGG_NUM = anonset_num ;
+    size_t MAX_AGG_NUM = num_receiver ;
     size_t Log_anonset_num = size_t(log2(anonset_num-1)+1);
     std::cout << "MAX_AGG_NUM = " << MAX_AGG_NUM << std::endl;
     std::cout << "Log_anonset_num = " << Log_anonset_num << std::endl;
@@ -313,6 +313,7 @@ Account CreateAccount(PP &pp, std::string identity, BigInt &init_balance)
 
     // initialize account balance with 0 coins
     BigInt r = GenRandomBigIntLessThan(order);
+    new_acct.r = r;
     new_acct.coin_ct = TwistedExponentialElGamal::Enc(pp.enc_part, new_acct.pk, init_balance, r);
 
     #ifdef DEMO
@@ -363,6 +364,7 @@ AnonTransaction CreateAnonTransaction(PP &pp, std::vector<Account> &Acct_sender,
     Bullet::Instance bullet_instance ;
     Bullet::Witness bullet_witness ;
     Bullet::Proof proof_bullet_proof;
+    ECPoint test;
     for(auto i = 0; i < pk_receiver.size(); i++)
     {
         Coin coin;
@@ -374,10 +376,13 @@ AnonTransaction CreateAnonTransaction(PP &pp, std::vector<Account> &Acct_sender,
         bullet_witness.r.push_back(vec_r_coin_output[i]);
         bullet_witness.v.push_back(v[i]);
         anon_transaction.output.push_back(coin);
+        
     }
+    //std::cout << "output.size" << anon_transaction.output.size() << std::endl;
     std::string transcript_str = "";
     Bullet::Prove(pp_bullet, bullet_instance, bullet_witness, transcript_str, proof_bullet_proof);
     anon_transaction.proof_bullet_proof = proof_bullet_proof;
+    std::cout << "bulletproof generation finishes" << std::endl;
     //generate the any out of many proof
     Solvent4UTXO::PP pp_any_out_of_many = Solvent4UTXO::Setup(anon_transaction.num_input, pp.enc_part.g, pp.enc_part.h);
     Solvent4UTXO::Instance solvent_instance;
@@ -390,16 +395,42 @@ AnonTransaction CreateAnonTransaction(PP &pp, std::vector<Account> &Acct_sender,
     for(auto i = 0; i < anon_transaction.num_input; i++)
     {
         solvent_instance.CoinInput[i] = anon_transaction.input[i].coin_tx.Y;
+        //anon_transaction.input[i].coin_tx.Y.Print("anon_transaction.input[i].coin_tx.Y");
     }
     solvent_instance.CoinOutput.resize(anon_transaction.num_output);
     for(auto i = 0; i < anon_transaction.num_output; i++)
     {
         solvent_instance.CoinOutput[i] = anon_transaction.output[i].coin_tx.Y;
+        //anon_transaction.output[i].coin_tx.Y.Print("anon_transaction.output[i].coin_tx.Y");
     }
     Solvent4UTXO::Witness solvent_witness;
     solvent_witness.vec_s = sk_sender;
     solvent_witness.vec_r_coin_output = vec_r_coin_output;
     solvent_witness.vec_r_coin_input.resize(Acct_sender.size());
+    //compute bit vector
+    std::vector<BigInt> vec_b(anon_transaction.num_input);
+    size_t index_j = 0;
+    for(auto i = 0; i < anon_transaction.num_input; i++)
+    {
+        if(index_j >= Acct_sender.size())
+        {
+            vec_b[i] = bn_0;
+        }
+        else
+        {
+            if(anon_transaction.input[i].pk == Acct_sender[index_j].pk)
+            {
+                vec_b[i] = bn_1;
+                index_j++;
+            }
+            else
+            {
+                vec_b[i] = bn_0;
+            }
+        }
+    }
+    solvent_witness.vec_b = vec_b;
+    PrintBigIntVector(solvent_witness.vec_b, "solvent_witness.vec_b");
     for(auto i = 0; i < Acct_sender.size(); i++)
     {
         solvent_witness.vec_r_coin_input[i] = Acct_sender[i].r;
@@ -428,7 +459,6 @@ bool VerifyAnoyTX(PP &pp, AnonTransaction anon_transaction)
     if(condition1 == false)
     {
         std::cout << "bulletproof verification fails" << std::endl;
-        return false;
     }
     // verify the any out of many proof
     Solvent4UTXO::PP pp_any_out_of_many = Solvent4UTXO::Setup(anon_transaction.num_input, pp.enc_part.g, pp.enc_part.h);
@@ -451,7 +481,6 @@ bool VerifyAnoyTX(PP &pp, AnonTransaction anon_transaction)
     if(condition2 == false)
     {
         std::cout << "any out of many proof verification fails" << std::endl;
-        return false;
     }
     return condition1 && condition2;
     
