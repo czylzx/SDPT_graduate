@@ -127,6 +127,7 @@ PP Setup(size_t com_len, ECPoint g, ECPoint h)
 
 void Prove(PP &pp,Instance &instance, Witness &witness, Proof &proof , std::string &transcript_str)
 {
+    
     auto start_time = std::chrono::steady_clock::now();
 
     size_t LEN = pp.com_len;
@@ -405,7 +406,7 @@ bool Verify(PP &pp, Instance &instance, Proof &proof, std::string &transcript_st
     InnerProduct::Instance ip_instance;
     ip_pp.u = pp.u * e; // u = u^e 
     
-    vec_A.resize(4*ip_pp.VECTOR_LEN+5); 
+    vec_A.resize(3*ip_pp.VECTOR_LEN+5); 
     std::copy(pp.vec_g.begin(), pp.vec_g.end(), vec_A.begin());
     std::copy(pp.vec_h.begin(), pp.vec_h.end(), vec_A.begin()+ip_pp.VECTOR_LEN);
     std::copy(instance.vec_com.begin(), instance.vec_com.end(), vec_A.begin()+2*ip_pp.VECTOR_LEN);
