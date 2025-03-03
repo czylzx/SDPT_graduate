@@ -1,5 +1,6 @@
 #include "../sdpt/sdpt_UTXO.hpp"
 #include "../crypto/setup.hpp"
+#define DEBUG
 // count the number of transaction
 BigInt count=bn_0;
 void Build_SDPT_Test_Enviroment(size_t ringnumber, size_t num_receiver)
@@ -267,6 +268,10 @@ void Emulate_SDPT_System(size_t ringnumber, size_t num_sender, size_t num_receiv
    
     std::cout << "begin to mine" << std::endl;
     SDPT_UTXO::Miner(pp, anon_transaction);
+    PrintSplitLine('-');
+
+    std::cout << "begin to supervise" << std::endl;
+    SDPT_UTXO::SuperviseAnonTx(sp, pp, anon_transaction);
     PrintSplitLine('-');
 }
 

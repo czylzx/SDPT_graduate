@@ -7,12 +7,12 @@ this hpp implements the SDPT functionality
 #include "../pke/twisted_exponential_elgamal.hpp"        // implement twisted ElGamal PKE
 #include "../zkp/bulletproofs/bullet_proof.hpp"          // implement Bulletproof
 #include "../zkp/nizk/nizk_solvent_any_out_of_many.hpp" // implement any out of many proof
-#include "../zkp/nizk/nizk_plaintext_bit_equality.hpp" // NIZKPoK for plaintext bit equality
-#include "../zkp/nizk/nizk_multi_plaintext_equality.hpp" // NIZKPoK for multi plaintext equality
+#include "../zkp/nizk/nizk_plaintext_knowledge.hpp"     // NIZKPoK for plaintext knowledge
+#include "../zkp/nizk/nizk_double_plaintext_equality.hpp" // NIZKPoK for plaintext equality
 #include "../utility/serialization.hpp"
 #include <time.h>
 #define DEMO           // demo mode 
-// #define DEBUG        // show debug information 
+#define DEBUG        // show debug information 
 
 
 namespace SDPT_UTXO{
@@ -26,6 +26,7 @@ struct PP
     BigInt MAXIMUM_COINS; 
     size_t anonset_num; // the number of AnonSet,include the sender
     Bullet::PP bullet_part;
+    Solvent4UTXO::PP pp_solvent;
     TwistedExponentialElGamal::PP enc_part;
     //ExponentialElGamal::PP enc_part;
     //Pedersen::PP com_part;
@@ -84,11 +85,15 @@ struct AnonTransaction
     
    Bullet::Proof proof_bullet_proof; // NIZKPoK for bullet proof
 
-   
+   std::vector<PlaintextKnowledge::Proof> proof_plaintext_knowledge_proof; // NIZKPoK for the Plaintext Knowledge
+
+   // we will combine the proof_plaintext_knowledge_proof to  proof_plaintext_bit_equality_proof later
+
    std::vector<TwistedExponentialElGamal::CT> cipher_supervison_value;
    TwistedExponentialElGamal::CT cipher_supervision_sender;
+   std::vector<PlaintextEquality4Two::Proof> proof_cipher_supervision_value;
    //Superviseable proof
-   //PlaintextBitEquality::Proof proof_plaintext_bit_equality_proof; // NIZKPoK for the Plaintext Bit Equality
+   PlaintextKnowledge::Proof proof_cipher_supervision_sender; // NIZKPoK for the Plaintext Bit Equality
 
 };
 
@@ -153,6 +158,7 @@ void SavePP(PP &pp, std::string SDPT_PP_File)
 
     fout << pp.bullet_part; 
     fout << pp.enc_part; 
+    fout << pp.pp_solvent;
 
 
     fout.close();   
@@ -169,6 +175,7 @@ void FetchPP(PP &pp, std::string SDPT_PP_File)
  
     fin >> pp.bullet_part;
     fin >> pp.enc_part; 
+    fin >> pp.pp_solvent;
 
 
     fin.close();   
@@ -221,7 +228,9 @@ void SaveAnonyTx(AnonTransaction anon_transaction, std::string sdpt_anontx_file)
     fout << anon_transaction.proof_bullet_proof;
     fout << anon_transaction.cipher_supervison_value;
     fout << anon_transaction.cipher_supervision_sender;
-    
+
+    fout << anon_transaction.proof_plaintext_knowledge_proof;
+    fout << anon_transaction.proof_cipher_supervision_sender;
     fout.close();
 
     // calculate the size of tx_file
@@ -256,6 +265,8 @@ void FetchAnonyTx(AnonTransaction &anon_transaction, std::string sdpt_anontx_fil
     fin >> anon_transaction.proof_bullet_proof;
     fin >> anon_transaction.cipher_supervison_value;
     fin >> anon_transaction.cipher_supervision_sender;
+    fin >> anon_transaction.proof_plaintext_knowledge_proof;
+    fin >> anon_transaction.proof_cipher_supervision_sender;
 
     fin.close(); 
 }
@@ -281,6 +292,8 @@ std::tuple<PP, SP> Setup(size_t LOG_MAXIMUM_COINS, size_t anonset_num, size_t nu
     
     size_t TRADEOFF_NUM = 7; 
     pp.enc_part = TwistedExponentialElGamal::Setup(LOG_MAXIMUM_COINS, TRADEOFF_NUM);  
+    pp.pp_solvent = Solvent4UTXO::Setup(anonset_num, pp.enc_part.g, pp.enc_part.h);
+    
     //pp.com_part = Pedersen::Setup(4*Log_anonset_num+2); // the size of the Pedersen commitment is 4*Log_anonset_num+2
 
     std::tie(pp.pka, sp.ska) = TwistedExponentialElGamal::KeyGen(pp.enc_part);
@@ -364,7 +377,11 @@ AnonTransaction CreateAnonTransaction(PP &pp, std::vector<Account> &Acct_sender,
     Bullet::Instance bullet_instance ;
     Bullet::Witness bullet_witness ;
     Bullet::Proof proof_bullet_proof;
-    ECPoint test;
+    PlaintextKnowledge::PP pp_plaintext_knowledge = PlaintextKnowledge::Setup(pp.enc_part);
+    PlaintextKnowledge::Instance plaintext_knowledge_instance;
+    PlaintextKnowledge::Witness plaintext_knowledge_witness;
+    PlaintextKnowledge::Proof plaintext_knowledge_proof;
+    std::string transcript_str_Plaintext = "";
     for(auto i = 0; i < pk_receiver.size(); i++)
     {
         Coin coin;
@@ -376,15 +393,52 @@ AnonTransaction CreateAnonTransaction(PP &pp, std::vector<Account> &Acct_sender,
         bullet_witness.r.push_back(vec_r_coin_output[i]);
         bullet_witness.v.push_back(v[i]);
         anon_transaction.output.push_back(coin);
-        
+        //generate the plaintext knowledge proof
+        transcript_str_Plaintext = "";
+        plaintext_knowledge_instance.pk = coin.pk;
+        plaintext_knowledge_instance.ct = coin.coin_tx;
+        plaintext_knowledge_witness.r = vec_r_coin_output[i];
+        plaintext_knowledge_witness.v = v[i];
+        plaintext_knowledge_proof = PlaintextKnowledge::Prove(pp_plaintext_knowledge, plaintext_knowledge_instance, plaintext_knowledge_witness, transcript_str_Plaintext );
+        anon_transaction.proof_plaintext_knowledge_proof.push_back(plaintext_knowledge_proof);  
     }
     //std::cout << "output.size" << anon_transaction.output.size() << std::endl;
     std::string transcript_str = "";
     Bullet::Prove(pp_bullet, bullet_instance, bullet_witness, transcript_str, proof_bullet_proof);
     anon_transaction.proof_bullet_proof = proof_bullet_proof;
     std::cout << "bulletproof generation finishes" << std::endl;
+    // generate the PlaintextEquality4Two proof
+    std::vector<TwistedExponentialElGamal::CT> cipher_supervison_value(pk_receiver.size());
+    TwistedExponentialElGamal::CT cipher_supervision_sender;
+    std::vector<BigInt> vec_r_supervision_value(pk_receiver.size());
+    
+    for(auto i = 0 ; i < pk_receiver.size();i++)
+    {
+        vec_r_supervision_value[i] = GenRandomBigIntLessThan(order);
+        cipher_supervison_value[i] = TwistedExponentialElGamal::Enc(pp.enc_part, pp.pka, v[i], vec_r_supervision_value[i]);
+        anon_transaction.cipher_supervison_value.push_back(cipher_supervison_value[i]);
+    }
+    PlaintextEquality4Two::PP pp_plaintext_equality = PlaintextEquality4Two::Setup(pp.enc_part);
+    PlaintextEquality4Two::Instance plaintext_equality_instance;
+    PlaintextEquality4Two::Witness plaintext_equality_witness;
+    PlaintextEquality4Two::Proof plaintext_equality_proof;
+    std::string transcript_str_Plaintext_equality = "";
+    for(auto i =0 ; i< pk_receiver.size(); i++)
+    {
+        transcript_str_Plaintext_equality = "";
+        plaintext_equality_instance.pk1 = pk_receiver[i];
+        plaintext_equality_instance.pk2 = pp.pka;
+        plaintext_equality_instance.ct1 = anon_transaction.output[i].coin_tx;
+        plaintext_equality_instance.ct2 = cipher_supervison_value[i];
+        plaintext_equality_witness.v = v[i];
+        plaintext_equality_witness.r1 = vec_r_coin_output[i];
+        plaintext_equality_witness.r2 = vec_r_supervision_value[i];
+        plaintext_equality_proof = PlaintextEquality4Two::Prove(pp_plaintext_equality, plaintext_equality_instance, plaintext_equality_witness, transcript_str_Plaintext_equality);
+        anon_transaction.proof_cipher_supervision_value.push_back(plaintext_equality_proof);
+    }
+
     //generate the any out of many proof
-    Solvent4UTXO::PP pp_any_out_of_many = Solvent4UTXO::Setup(anon_transaction.num_input, pp.enc_part.g, pp.enc_part.h);
+    Solvent4UTXO::PP pp_any_out_of_many = pp.pp_solvent;
     Solvent4UTXO::Instance solvent_instance;
     solvent_instance.vec_com.resize(anon_transaction.num_input);
     for(auto i = 0; i < anon_transaction.num_input; i++)
@@ -429,6 +483,7 @@ AnonTransaction CreateAnonTransaction(PP &pp, std::vector<Account> &Acct_sender,
                 if(pp.enc_part.g*Acct_sender[index_j].sk == anon_transaction.input[i].pk)
                 {
                     std::cout << "the sender's secret key is correct" << std::endl;
+                    anon_transaction.input[i].pk.Print("anon_transaction.input[i].pk");
                 }
                 else
                 {
@@ -451,15 +506,57 @@ AnonTransaction CreateAnonTransaction(PP &pp, std::vector<Account> &Acct_sender,
         }
     }
     solvent_witness.vec_b = vec_b;
+    size_t index2bn =0;
+    //need to fix later
+    auto b_size = vec_b.size()-1;
+    for(auto i = b_size; i>0; i--)
+    {
+        std::cout << "ii[i] = " << i << std::endl;
+        if(vec_b[i] == bn_1)
+        {
+            index2bn = index2bn + pow(2, i);
+        }  
+    }
+    if(vec_b[0] == bn_1)
+    {
+        index2bn = index2bn + 1;
+    }
+    BigInt super_senderindex2bn = BigInt(index2bn);
+    BigInt cipher_supervision_sender_r = GenRandomBigIntLessThan(order);
+    cipher_supervision_sender = TwistedExponentialElGamal::Enc(pp.enc_part, pp.pka, super_senderindex2bn, cipher_supervision_sender_r);
+    anon_transaction.cipher_supervision_sender = cipher_supervision_sender;
+    solvent_instance.Com = cipher_supervision_sender.Y;
     PrintBigIntVector(solvent_witness.vec_b, "solvent_witness.vec_b");
     for(auto i = 0; i < Acct_sender.size(); i++)
     {
         solvent_witness.vec_r_coin_input[i] = Acct_sender[i].r;
     }
+    solvent_witness.v = super_senderindex2bn;
+    solvent_witness.r = cipher_supervision_sender_r;
     Solvent4UTXO::Proof proof_any_out_of_many_proof;
     std::string transcript_str_any_out_of_many = "";
     Solvent4UTXO::Prove(pp_any_out_of_many, solvent_instance, solvent_witness, proof_any_out_of_many_proof, transcript_str_any_out_of_many);
     anon_transaction.proof_any_out_of_many_proof = proof_any_out_of_many_proof;
+
+    //generate the plaintext knowledge proof of the supervision index
+    PlaintextKnowledge::PP pp_plaintext_knowledge_supervision = PlaintextKnowledge::Setup(pp.enc_part);
+    PlaintextKnowledge::Instance plaintext_knowledge_instance_supervision;
+    PlaintextKnowledge::Witness plaintext_knowledge_witness_supervision;
+    PlaintextKnowledge::Proof plaintext_knowledge_proof_supervision;
+    std::string transcript_str_Plaintext_supervision = "";
+    plaintext_knowledge_instance_supervision.pk = pp.pka;
+    plaintext_knowledge_instance_supervision.ct = cipher_supervision_sender;
+    plaintext_knowledge_witness_supervision.v = super_senderindex2bn;
+    plaintext_knowledge_witness_supervision.r = cipher_supervision_sender_r;
+    plaintext_knowledge_proof_supervision = PlaintextKnowledge::Prove(pp_plaintext_knowledge_supervision, plaintext_knowledge_instance_supervision, plaintext_knowledge_witness_supervision, transcript_str_Plaintext_supervision);
+    anon_transaction.proof_cipher_supervision_sender = plaintext_knowledge_proof_supervision;
+    transcript_str_Plaintext_supervision = "";
+    bool test = PlaintextKnowledge::Verify(pp_plaintext_knowledge_supervision, plaintext_knowledge_instance_supervision, transcript_str_Plaintext_supervision, plaintext_knowledge_proof_supervision);
+    if(test == false)
+    {
+        std::cout << "sb" << std::endl;
+    }
+
     return anon_transaction;
 }   
 
@@ -481,12 +578,32 @@ bool VerifyAnoyTX(PP &pp, AnonTransaction anon_transaction)
     {
         std::cout << "bulletproof verification fails" << std::endl;
     }
+    // verify the PlaintextEquality4Two proof
+    PlaintextEquality4Two::PP pp_plaintext_equality = PlaintextEquality4Two::Setup(pp.enc_part);
+    PlaintextEquality4Two::Instance plaintext_equality_instance;
+    PlaintextEquality4Two::Proof plaintext_equality_proof;
+    std::string transcript_str_Plaintext_equality = "";
+    for(auto i =0 ; i< anon_transaction.num_output; i++)
+    {
+        transcript_str_Plaintext_equality = "";
+        plaintext_equality_instance.pk1 = anon_transaction.output[i].pk;
+        plaintext_equality_instance.pk2 = pp.pka;
+        plaintext_equality_instance.ct1 = anon_transaction.output[i].coin_tx;
+        plaintext_equality_instance.ct2 = anon_transaction.cipher_supervison_value[i];
+        bool condition = PlaintextEquality4Two::Verify(pp_plaintext_equality, plaintext_equality_instance, transcript_str_Plaintext_equality, anon_transaction.proof_cipher_supervision_value[i]);
+        if(condition == false)
+        {
+            std::cout << "plaintext equality proof verification fails" << std::endl;
+        }
+    }
+
     // verify the any out of many proof
-    Solvent4UTXO::PP pp_any_out_of_many = Solvent4UTXO::Setup(anon_transaction.num_input, pp.enc_part.g, pp.enc_part.h);
+    Solvent4UTXO::PP pp_any_out_of_many = pp.pp_solvent;
     Solvent4UTXO::Instance solvent_instance;
     for(auto i = 0; i < anon_transaction.num_input; i++)
     {
         solvent_instance.vec_com.push_back(anon_transaction.input[i].pk);
+        anon_transaction.input[i].pk.Print("anon_transaction.input[i].pk");
     }
     for(auto i = 0; i < anon_transaction.num_input; i++)
     {
@@ -495,6 +612,35 @@ bool VerifyAnoyTX(PP &pp, AnonTransaction anon_transaction)
     for(auto i = 0; i < anon_transaction.num_output; i++)
     {
         solvent_instance.CoinOutput.push_back(anon_transaction.output[i].coin_tx.Y);
+    }
+    solvent_instance.Com = anon_transaction.cipher_supervision_sender.Y;
+    // verify the supervision index proof
+    PlaintextKnowledge::PP pp_plaintext_knowledge_supervision = PlaintextKnowledge::Setup(pp.enc_part);
+    std::string transcript_str_Plaintext_supervision = "";
+    PlaintextKnowledge::Instance plaintext_knowledge_instance_supervision;
+    plaintext_knowledge_instance_supervision.pk = pp.pka;
+    plaintext_knowledge_instance_supervision.ct = anon_transaction.cipher_supervision_sender;
+    PlaintextKnowledge::Proof plaintext_knowledge_proof_supervision = anon_transaction.proof_cipher_supervision_sender;
+    bool condition3 = PlaintextKnowledge::Verify(pp_plaintext_knowledge_supervision, plaintext_knowledge_instance_supervision, transcript_str_Plaintext_supervision, plaintext_knowledge_proof_supervision);
+    if(condition3 == false)
+    {
+        std::cout << "plaintext knowledge proof of supervision index verification fails" << std::endl;
+    }
+    //verify the PlaintextKnowledge proof
+    PlaintextKnowledge::PP pp_plaintext_knowledge = PlaintextKnowledge::Setup(pp.enc_part);
+    std::string transcript_str_Plaintext = "";
+    for(auto i = 0; i < anon_transaction.num_output; i++)
+    {
+        transcript_str_Plaintext = "";
+        PlaintextKnowledge::Instance plaintext_knowledge_instance;
+        plaintext_knowledge_instance.pk = anon_transaction.output[i].pk;
+        plaintext_knowledge_instance.ct = anon_transaction.output[i].coin_tx;
+        PlaintextKnowledge::Proof plaintext_knowledge_proof = anon_transaction.proof_plaintext_knowledge_proof[i];
+        bool condition = PlaintextKnowledge::Verify(pp_plaintext_knowledge, plaintext_knowledge_instance, transcript_str_Plaintext, plaintext_knowledge_proof);
+        if(condition == false)
+        {
+            std::cout << "plaintext knowledge proof verification fails" << std::endl;
+        }
     }
     Solvent4UTXO::Proof proof_any_out_of_many_proof = anon_transaction.proof_any_out_of_many_proof;
     std::string transcript_str_any_out_of_many = "";
@@ -547,11 +693,22 @@ bool Miner(PP &pp,AnonTransaction anon_transaction)
 
 }
 
-
 /* supervisor opens CTx */
 SupervisionResult SuperviseAnonTx(SP &sp, PP &pp, AnonTransaction &anon_transaction)
 {
     SupervisionResult result;
+    std::cout << "Supervise " << GetAnonTxFileName(anon_transaction) << std::endl;
+    auto start_time = std::chrono::steady_clock::now();
+    size_t num_output = anon_transaction.num_output;
+    for(auto i = 0; i < num_output; i++)
+    {
+        BigInt v = TwistedExponentialElGamal::Dec(pp.enc_part, sp.ska, anon_transaction.cipher_supervison_value[i]);
+        result.cipher_supervison_value.push_back(v);
+        result.cipher_supervision_pk_sender.push_back(anon_transaction.output[i].pk);
+        std::cout << "sender pay " << BN_bn2dec(v.bn_ptr) << " coins to receiver: " <<anon_transaction.output[i].pk.ToHexString() << std::endl;
+        PrintSplitLine('-');
+    }
+
     return result;
 }
 
