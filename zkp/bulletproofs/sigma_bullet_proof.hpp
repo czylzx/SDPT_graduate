@@ -147,7 +147,7 @@ void Prove(PP &pp, Instance &instance, Witness &witness, std::string &transcript
     transcript_str += many_out_of_many_proof.proof_commitment_B.ToByteString();  
     BigInt v = Hash::StringToBigInt(transcript_str);
     size_t m = many_out_of_many_proof.proof_vec_lower_cipher_balance_left.size();
-    std::cout << "Log_mom_proof.Num = " << m << std::endl;
+    //std::cout << "Log_mom_proof.Num = " << m << std::endl;
     for(size_t i = 0; i < m; i++)
     {
         transcript_str += many_out_of_many_proof.proof_vec_lower_cipher_balance_left[i].ToByteString();
@@ -363,7 +363,7 @@ void Prove(PP &pp, Instance &instance, Witness &witness, std::string &transcript
 
     ip_instance.P = ECPointVectorMul(vec_A, vec_a);  
     
-    std::cout << "begin to prove inner product" << std::endl;
+    //std::cout << "begin to prove inner product" << std::endl;
  
     InnerProduct::Prove(ip_pp, ip_instance, ip_witness, transcript_str, proof.ip_proof); 
 

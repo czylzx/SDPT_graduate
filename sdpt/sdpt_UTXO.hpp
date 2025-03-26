@@ -11,8 +11,8 @@ this hpp implements the SDPT functionality
 #include "../zkp/nizk/nizk_double_plaintext_equality.hpp" // NIZKPoK for plaintext equality
 #include "../utility/serialization.hpp"
 #include <time.h>
-#define DEMO           // demo mode 
-#define DEBUG        // show debug information 
+//#define DEMO           // demo mode 
+//#define DEBUG        // show debug information 
 
 
 namespace SDPT_UTXO{
@@ -69,7 +69,7 @@ struct SupervisionResult
     std::vector<size_t> cipher_supervision_index_sender;
 };
 
-//the structure of Anonymous Transaction 1
+//the structure of Anonymous Transaction 
 struct AnonTransaction
 {
    size_t num_input; // the number of input
@@ -94,6 +94,11 @@ struct AnonTransaction
    std::vector<PlaintextEquality4Two::Proof> proof_cipher_supervision_value;
    //Superviseable proof
    PlaintextKnowledge::Proof proof_cipher_supervision_sender; // NIZKPoK for the Plaintext Bit Equality
+   
+   //only num_input = 64, this wile be used 
+   TwistedExponentialElGamal::CT cipher_supervision_sender_low;
+   TwistedExponentialElGamal::CT cipher_supervision_sender_high;
+   
 
 };
 
@@ -107,20 +112,20 @@ std::string GetAnonTxFileName(AnonTransaction &anon_transaction)
 
 void PrintPP(PP &pp)
 {
-    PrintSplitLine('-');
-    std::cout << "pp content >>>>>>" << std::endl; 
-    std::cout << "anonset_num = " << pp.anonset_num << std::endl; 
-    pp.pka.Print("supervisor's pk");  
+    // PrintSplitLine('-');
+    // std::cout << "pp content >>>>>>" << std::endl; 
+    // std::cout << "anonset_num = " << pp.anonset_num << std::endl; 
+    // pp.pka.Print("supervisor's pk");  
     PrintSplitLine('-'); 
 }
 
 void PrintAccount(Account &Acct)
 {
-    std::cout << Acct.identity << " account information >>> " << std::endl;     
-    Acct.pk.Print("pk"); 
-    std::cout << "encrypted balance:" << std::endl; 
-    TwistedExponentialElGamal::PrintCT(Acct.coin_ct);  // current balance
-    Acct.m.PrintInDec("m"); 
+    // std::cout << Acct.identity << " account information >>> " << std::endl;     
+    // Acct.pk.Print("pk"); 
+    // std::cout << "encrypted balance:" << std::endl; 
+    // TwistedExponentialElGamal::PrintCT(Acct.coin_ct);  // current balance
+    // Acct.m.PrintInDec("m"); 
     PrintSplitLine('-'); 
 }
 
@@ -210,6 +215,7 @@ void FetchAccount(Account &user, std::string sdp_account_file)
 void SaveAnonyTx(AnonTransaction anon_transaction, std::string sdpt_anontx_file)
 {
     std::ofstream fout; 
+    std::ifstream fin; 
     fout.open(sdpt_anontx_file, std::ios::binary); 
     size_t num_input = anon_transaction.num_input;
     for(auto i = 0; i < anon_transaction.num_input; i++)
@@ -226,18 +232,35 @@ void SaveAnonyTx(AnonTransaction anon_transaction, std::string sdpt_anontx_file)
 
     fout << anon_transaction.proof_any_out_of_many_proof;
     fout << anon_transaction.proof_bullet_proof;
+    fout << anon_transaction.proof_plaintext_knowledge_proof;
+
+    fout.close();
+    fin.open(sdpt_anontx_file, std::ios::ate | std::ios::binary);
+    auto size_1 = fin.tellg();
+    std::cout << sdpt_anontx_file << " size = " << size_1 << " bytes" << std::endl;
+    fin.close();
+
+    fout.open(sdpt_anontx_file, std::ios::binary | std::ios::app);
     fout << anon_transaction.cipher_supervison_value;
     fout << anon_transaction.cipher_supervision_sender;
-
-    fout << anon_transaction.proof_plaintext_knowledge_proof;
     fout << anon_transaction.proof_cipher_supervision_sender;
+
+    if(num_input == 64)
+    {
+        fout << anon_transaction.cipher_supervision_sender_low;
+        fout << anon_transaction.cipher_supervision_sender_high;
+    }
+
     fout.close();
 
     // calculate the size of tx_file
-    std::ifstream fin; 
+    // std::ifstream fin; 
     fin.open(sdpt_anontx_file, std::ios::ate | std::ios::binary);
-    std::cout << sdpt_anontx_file << " size = " << fin.tellg() << " bytes" << std::endl;
+    auto size_2 = fin.tellg();
+    std::cout << sdpt_anontx_file << " size = " << size_2 << " bytes" << std::endl;
     fin.close(); 
+    auto diff = size_2 - size_1;
+    std::cout << "rate of the size of the file = " << double(diff)/double(size_2) << std::endl;
     return;
 }
 
@@ -263,10 +286,16 @@ void FetchAnonyTx(AnonTransaction &anon_transaction, std::string sdpt_anontx_fil
 
     fin >> anon_transaction.proof_any_out_of_many_proof;
     fin >> anon_transaction.proof_bullet_proof;
+    fin >> anon_transaction.proof_plaintext_knowledge_proof;
     fin >> anon_transaction.cipher_supervison_value;
     fin >> anon_transaction.cipher_supervision_sender;
-    fin >> anon_transaction.proof_plaintext_knowledge_proof;
     fin >> anon_transaction.proof_cipher_supervision_sender;
+
+    if(num_input == 64)
+    {
+        fin >> anon_transaction.cipher_supervision_sender_low;
+        fin >> anon_transaction.cipher_supervision_sender_high;
+    }
 
     fin.close(); 
 }
@@ -286,8 +315,8 @@ std::tuple<PP, SP> Setup(size_t LOG_MAXIMUM_COINS, size_t anonset_num, size_t nu
     pp.anonset_num = anonset_num;
     size_t MAX_AGG_NUM = num_receiver ;
     size_t Log_anonset_num = size_t(log2(anonset_num-1)+1);
-    std::cout << "MAX_AGG_NUM = " << MAX_AGG_NUM << std::endl;
-    std::cout << "Log_anonset_num = " << Log_anonset_num << std::endl;
+    // std::cout << "MAX_AGG_NUM = " << MAX_AGG_NUM << std::endl;
+    // std::cout << "Log_anonset_num = " << Log_anonset_num << std::endl;
     pp.bullet_part = Bullet::Setup(LOG_MAXIMUM_COINS, MAX_AGG_NUM); 
     
     size_t TRADEOFF_NUM = 7; 
@@ -381,6 +410,9 @@ AnonTransaction CreateAnonTransaction(PP &pp, std::vector<Account> &Acct_sender,
     PlaintextKnowledge::Instance plaintext_knowledge_instance;
     PlaintextKnowledge::Witness plaintext_knowledge_witness;
     PlaintextKnowledge::Proof plaintext_knowledge_proof;
+
+    auto start_time = std::chrono::steady_clock::now();
+
     std::string transcript_str_Plaintext = "";
     for(auto i = 0; i < pk_receiver.size(); i++)
     {
@@ -406,7 +438,7 @@ AnonTransaction CreateAnonTransaction(PP &pp, std::vector<Account> &Acct_sender,
     std::string transcript_str = "";
     Bullet::Prove(pp_bullet, bullet_instance, bullet_witness, transcript_str, proof_bullet_proof);
     anon_transaction.proof_bullet_proof = proof_bullet_proof;
-    std::cout << "bulletproof generation finishes" << std::endl;
+    // std::cout << "bulletproof generation finishes" << std::endl;
     // generate the PlaintextEquality4Two proof
     std::vector<TwistedExponentialElGamal::CT> cipher_supervison_value(pk_receiver.size());
     TwistedExponentialElGamal::CT cipher_supervision_sender;
@@ -479,24 +511,6 @@ AnonTransaction CreateAnonTransaction(PP &pp, std::vector<Account> &Acct_sender,
             if(anon_transaction.input[i].pk == Acct_sender[index_j].pk)
             {
                 vec_b[i] = bn_1;
-                Acct_sender[index_j].sk.Print("Acct_sender[index_j].sk");
-                if(pp.enc_part.g*Acct_sender[index_j].sk == anon_transaction.input[i].pk)
-                {
-                    std::cout << "the sender's secret key is correct" << std::endl;
-                    anon_transaction.input[i].pk.Print("anon_transaction.input[i].pk");
-                }
-                else
-                {
-                    std::cout << "the sender's secret key is wrong" << std::endl;
-                }
-                if(solvent_instance.vec_com[i]==anon_transaction.input[i].pk)
-                {
-                    std::cout << "the sender's public key is correct" << std::endl;
-                }
-                else
-                {
-                    std::cout << "the sender's public key is wrong" << std::endl;
-                }
                 index_j++;
             }
             else
@@ -506,12 +520,12 @@ AnonTransaction CreateAnonTransaction(PP &pp, std::vector<Account> &Acct_sender,
         }
     }
     solvent_witness.vec_b = vec_b;
-    size_t index2bn =0;
+    /*size_t index2bn =0;
     //need to fix later
     auto b_size = vec_b.size()-1;
     for(auto i = b_size; i>0; i--)
     {
-        std::cout << "ii[i] = " << i << std::endl;
+        //std::cout << "ii[i] = " << i << std::endl;
         if(vec_b[i] == bn_1)
         {
             index2bn = index2bn + pow(2, i);
@@ -520,13 +534,31 @@ AnonTransaction CreateAnonTransaction(PP &pp, std::vector<Account> &Acct_sender,
     if(vec_b[0] == bn_1)
     {
         index2bn = index2bn + 1;
-    }
-    BigInt super_senderindex2bn = BigInt(index2bn);
+    }*/
+    //BigInt super_senderindex2bn = BigInt(index2bn);
+    BigInt super_senderindex2bn = FromBitVector(vec_b);
+
     BigInt cipher_supervision_sender_r = GenRandomBigIntLessThan(order);
     cipher_supervision_sender = TwistedExponentialElGamal::Enc(pp.enc_part, pp.pka, super_senderindex2bn, cipher_supervision_sender_r);
     anon_transaction.cipher_supervision_sender = cipher_supervision_sender;
     solvent_instance.Com = cipher_supervision_sender.Y;
-    PrintBigIntVector(solvent_witness.vec_b, "solvent_witness.vec_b");
+
+    if(anon_transaction.num_input == 64)
+    {
+        std::vector<BigInt> vec_b_low(32);
+        std::vector<BigInt> vec_b_high(32);
+        std::copy(vec_b.begin(), vec_b.begin()+32, vec_b_low.begin());
+        std::copy(vec_b.begin()+32, vec_b.end(), vec_b_high.begin());
+        BigInt super_senderindex2bn_low = FromBitVector(vec_b_low);
+        BigInt super_senderindex2bn_high = FromBitVector(vec_b_high);
+        TwistedExponentialElGamal::CT cipher_supervision_sender_low = TwistedExponentialElGamal::Enc(pp.enc_part, pp.pka, super_senderindex2bn_low, cipher_supervision_sender_r);
+        TwistedExponentialElGamal::CT cipher_supervision_sender_high = TwistedExponentialElGamal::Enc(pp.enc_part, pp.pka, super_senderindex2bn_high, cipher_supervision_sender_r);
+        anon_transaction.cipher_supervision_sender_low = cipher_supervision_sender_low;
+        anon_transaction.cipher_supervision_sender_high = cipher_supervision_sender_high;
+       
+    }
+
+    //PrintBigIntVector(solvent_witness.vec_b, "solvent_witness.vec_b");
     for(auto i = 0; i < Acct_sender.size(); i++)
     {
         solvent_witness.vec_r_coin_input[i] = Acct_sender[i].r;
@@ -540,6 +572,7 @@ AnonTransaction CreateAnonTransaction(PP &pp, std::vector<Account> &Acct_sender,
 
     //generate the plaintext knowledge proof of the supervision index
     PlaintextKnowledge::PP pp_plaintext_knowledge_supervision = PlaintextKnowledge::Setup(pp.enc_part);
+    auto start_time_audit = std::chrono::steady_clock::now();
     PlaintextKnowledge::Instance plaintext_knowledge_instance_supervision;
     PlaintextKnowledge::Witness plaintext_knowledge_witness_supervision;
     PlaintextKnowledge::Proof plaintext_knowledge_proof_supervision;
@@ -550,13 +583,15 @@ AnonTransaction CreateAnonTransaction(PP &pp, std::vector<Account> &Acct_sender,
     plaintext_knowledge_witness_supervision.r = cipher_supervision_sender_r;
     plaintext_knowledge_proof_supervision = PlaintextKnowledge::Prove(pp_plaintext_knowledge_supervision, plaintext_knowledge_instance_supervision, plaintext_knowledge_witness_supervision, transcript_str_Plaintext_supervision);
     anon_transaction.proof_cipher_supervision_sender = plaintext_knowledge_proof_supervision;
-    transcript_str_Plaintext_supervision = "";
-    bool test = PlaintextKnowledge::Verify(pp_plaintext_knowledge_supervision, plaintext_knowledge_instance_supervision, transcript_str_Plaintext_supervision, plaintext_knowledge_proof_supervision);
-    if(test == false)
-    {
-        std::cout << "sb" << std::endl;
-    }
+    auto end_time_audit = std::chrono::steady_clock::now();
+    auto time_diff_audit = end_time_audit - start_time_audit;
+    std::cout << "audit time = " << std::chrono::duration<double, std::milli>(time_diff_audit).count() << " ms" << std::endl;
 
+    auto end_time = std::chrono::steady_clock::now();
+    auto time_diff = end_time - start_time;
+    std::cout << "transaction generation time = " << std::chrono::duration<double, std::milli>(time_diff).count() << " ms" << std::endl;
+
+    std::cout << "rate of generation time = " << std::chrono::duration<double,std::milli>(time_diff_audit).count()/std::chrono::duration<double, std::milli>(time_diff).count() << " ms" << std::endl;
     return anon_transaction;
 }   
 
@@ -564,6 +599,7 @@ AnonTransaction CreateAnonTransaction(PP &pp, std::vector<Account> &Acct_sender,
 bool VerifyAnoyTX(PP &pp, AnonTransaction anon_transaction)
 {
     // verify the bulletproof
+    auto start_time = std::chrono::steady_clock::now();
     bool condition1 = false;
     Bullet::PP pp_bullet = pp.bullet_part;
     Bullet::Instance bullet_instance ;
@@ -603,7 +639,7 @@ bool VerifyAnoyTX(PP &pp, AnonTransaction anon_transaction)
     for(auto i = 0; i < anon_transaction.num_input; i++)
     {
         solvent_instance.vec_com.push_back(anon_transaction.input[i].pk);
-        anon_transaction.input[i].pk.Print("anon_transaction.input[i].pk");
+        //anon_transaction.input[i].pk.Print("anon_transaction.input[i].pk");
     }
     for(auto i = 0; i < anon_transaction.num_input; i++)
     {
@@ -616,12 +652,17 @@ bool VerifyAnoyTX(PP &pp, AnonTransaction anon_transaction)
     solvent_instance.Com = anon_transaction.cipher_supervision_sender.Y;
     // verify the supervision index proof
     PlaintextKnowledge::PP pp_plaintext_knowledge_supervision = PlaintextKnowledge::Setup(pp.enc_part);
+    auto start_time_audit = std::chrono::steady_clock::now();
     std::string transcript_str_Plaintext_supervision = "";
     PlaintextKnowledge::Instance plaintext_knowledge_instance_supervision;
     plaintext_knowledge_instance_supervision.pk = pp.pka;
     plaintext_knowledge_instance_supervision.ct = anon_transaction.cipher_supervision_sender;
     PlaintextKnowledge::Proof plaintext_knowledge_proof_supervision = anon_transaction.proof_cipher_supervision_sender;
     bool condition3 = PlaintextKnowledge::Verify(pp_plaintext_knowledge_supervision, plaintext_knowledge_instance_supervision, transcript_str_Plaintext_supervision, plaintext_knowledge_proof_supervision);
+    auto end_time_audit = std::chrono::steady_clock::now();
+    auto time_diff_audit = end_time_audit - start_time_audit;
+    std::cout << "audit time = " << std::chrono::duration<double, std::milli>(time_diff_audit).count() << " ms" << std::endl;
+
     if(condition3 == false)
     {
         std::cout << "plaintext knowledge proof of supervision index verification fails" << std::endl;
@@ -645,6 +686,10 @@ bool VerifyAnoyTX(PP &pp, AnonTransaction anon_transaction)
     Solvent4UTXO::Proof proof_any_out_of_many_proof = anon_transaction.proof_any_out_of_many_proof;
     std::string transcript_str_any_out_of_many = "";
     bool condition2 = Solvent4UTXO::Verify(pp_any_out_of_many, solvent_instance, proof_any_out_of_many_proof, transcript_str_any_out_of_many);
+    auto end_time = std::chrono::steady_clock::now();
+    auto time_diff = end_time - start_time;
+    std::cout << "verification time = " << std::chrono::duration<double, std::milli>(time_diff).count() << " ms" << std::endl;
+    std::cout << "rate of verification time = " << std::chrono::duration<double,std::milli>(time_diff_audit).count()/std::chrono::duration<double, std::milli>(time_diff).count() << " ms" << std::endl;
     if(condition2 == false)
     {
         std::cout << "any out of many proof verification fails" << std::endl;
@@ -683,16 +728,24 @@ bool Miner(PP &pp,AnonTransaction anon_transaction)
     
     if(VerifyAnoyTX(pp, anon_transaction) == true){
         SaveAnonyTx(anon_transaction, tx_file);  //need to realize
-        std::cout << tx_file << " is recorded on the blockchain" << std::endl; 
+        //std::cout << tx_file << " is recorded on the blockchain" << std::endl; 
         return true; 
     }
     else{
-        std::cout << tx_file << " is discarded" << std::endl; 
+        //std::cout << tx_file << " is discarded" << std::endl; 
         return false; 
     }
 
 }
-
+std::vector<size_t> Decompose(size_t l, size_t n, size_t m)
+{
+    std::vector<size_t> vec_index(m); 
+    for(auto j = 0; j < m; j++){
+        vec_index[j] = l % n;  
+        l = l / n; 
+    }
+    return vec_index;  
+}
 /* supervisor opens CTx */
 SupervisionResult SuperviseAnonTx(SP &sp, PP &pp, AnonTransaction &anon_transaction)
 {
@@ -705,9 +758,42 @@ SupervisionResult SuperviseAnonTx(SP &sp, PP &pp, AnonTransaction &anon_transact
         BigInt v = TwistedExponentialElGamal::Dec(pp.enc_part, sp.ska, anon_transaction.cipher_supervison_value[i]);
         result.cipher_supervison_value.push_back(v);
         result.cipher_supervision_pk_sender.push_back(anon_transaction.output[i].pk);
-        std::cout << "sender pay " << BN_bn2dec(v.bn_ptr) << " coins to receiver: " <<anon_transaction.output[i].pk.ToHexString() << std::endl;
-        PrintSplitLine('-');
+        //std::cout << "sender pay " << BN_bn2dec(v.bn_ptr) << " coins to receiver: " <<anon_transaction.output[i].pk.ToHexString() << std::endl;
+        //PrintSplitLine('-');
     }
+    if(anon_transaction.num_input == 64)
+    {
+        BigInt v_low = TwistedExponentialElGamal::Dec(pp.enc_part, sp.ska, anon_transaction.cipher_supervision_sender_low);
+        BigInt v_high = TwistedExponentialElGamal::Dec(pp.enc_part, sp.ska, anon_transaction.cipher_supervision_sender_high);
+        size_t index_low = v_low.ToUint64();
+        size_t index_high = v_high.ToUint64();
+        std::vector<size_t> vec_index_low = Decompose(index_low,2, pp.anonset_num/2);
+        std::vector<size_t> vec_index_high = Decompose(index_high,2, pp.anonset_num/2);
+        std::vector<size_t> vec_index;
+        vec_index.insert(vec_index.end(), vec_index_low.begin(), vec_index_low.end());
+        vec_index.insert(vec_index.end(), vec_index_high.begin(), vec_index_high.end());
+        for(auto i = 0; i < vec_index.size(); i++)
+        {
+            std::cout << "vec_index[" << i << "] = " << vec_index[i] << std::endl;
+        }
+    }
+    else
+    {
+        BigInt index = TwistedExponentialElGamal::Dec(pp.enc_part, sp.ska, anon_transaction.cipher_supervision_sender);
+        //std::cout << "the sender's index is " << BN_bn2dec(index.bn_ptr) << std::endl;
+        size_t index2 = index.ToUint64();
+        //std::cout << "the sender's index is " << index2 << std::endl;
+        std::vector<size_t> vec_index = Decompose(index2,2, pp.anonset_num);
+    }
+    
+    // for(auto i = 0; i < vec_index.size(); i++)
+    // {
+    //     std::cout << "vec_index[" << i << "] = " << vec_index[i] << std::endl;
+    // }
+    auto end_time = std::chrono::steady_clock::now();
+    auto time_diff = end_time - start_time;
+    std::cout << "supervision time = " << std::chrono::duration<double, std::milli>(time_diff).count() << " ms" << std::endl;
+
 
     return result;
 }

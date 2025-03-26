@@ -689,7 +689,7 @@ void Prove(PP &pp, Witness &witness, Instance &instance, std::string &transcript
     proof.proof_Sb0 = (kb + ((w_exp_m_times_c * witness.value) % order) * zsquare) % order; // S_b0 = k_b + c * w^m * z^2 * v
     proof.proof_Sb1 = (kb + ((w_exp_m_times_c * witness.vprime) % order) * zcube) % order; // S_b1 = k_b + c * w^m * z^3 * vprime
     
-    std::cout<<"Many_Out_Of_Many proof Success "<<std::endl;
+    //std::cout<<"Many_Out_Of_Many proof Success "<<std::endl;
     
 }
 
@@ -758,7 +758,7 @@ bool Verify(PP &pp, Instance &instance, std::string &transcript_str, Proof &proo
     }
 
     std::vector<BigInt> vec_move_f(4*m+2);
-    std::cout << "begin to fill the commitment terms" << std::endl;
+    //std::cout << "begin to fill the commitment terms" << std::endl;
     std::vector<BigInt> vec_move_f_tmp_4_f0(m);
     for(auto i = 0; i < m; i++)
     {
@@ -775,12 +775,12 @@ bool Verify(PP &pp, Instance &instance, std::string &transcript_str, Proof &proo
     std::copy(proof.proof_vec_eval_f1.begin(), proof.proof_vec_eval_f1.end(), vec_move_f.begin()+m);
     std::copy(vec_move_f_tmp_4_f0.begin(), vec_move_f_tmp_4_f0.end(), vec_move_f.begin()+2*m);
     std::copy(vec_move_f_tmp_4_f1.begin(), vec_move_f_tmp_4_f1.end(), vec_move_f.begin()+3*m);
-    PrintSplitLine('-');
-    std::cout << "success fill the commitment terms" << std::endl;
+    //PrintSplitLine('-');
+    //std::cout << "success fill the commitment terms" << std::endl;
     vec_move_f[4*m] = vec_move_f[0] * vec_move_f[m] % order;
     vec_move_f[4*m+1] = (((w - vec_move_f[0]) % order) * ((w - vec_move_f[m]) % order)) % order;
 
-    std::cout << "begin to check" << std::endl;
+    //std::cout << "begin to check" << std::endl;
     //check 1 the commitment
     ECPoint COM_LFET = proof.proof_commitment_A + proof.proof_commitment_B * w;
     ECPoint COM_RIGHT= Pedersen::Commit(pp.com_part, vec_move_f, proof.proof_Za);
@@ -789,10 +789,7 @@ bool Verify(PP &pp, Instance &instance, std::string &transcript_str, Proof &proo
         std::cout << "Commitment is wrong" << std::endl;
         return false;
     }
-    else
-    {
-        std::cout << "Commitment is right" << std::endl;
-    }
+
     
     //begin re-encryptions
     ECPoint re_encryption_cipher_balance_left = ECPointVectorMul(instance.vec_cipher_balance_left, vec_p0);
@@ -925,13 +922,13 @@ bool Verify(PP &pp, Instance &instance, std::string &transcript_str, Proof &proo
        
     }
 
-    if (Validity)
+    if (!Validity)
     { 
-        std::cout << "proof of many_out_of_many proof accepts >>>" << std::endl; 
+        std::cout << "proof of many_out_of_many proof rejects >>>" << std::endl; 
     }
     else
     {
-        std::cout << "proof of many_out_of_many proof rejects >>>" << std::endl; 
+        // std::cout << "proof of many_out_of_many proof rejects >>>" << std::endl; 
     }
     return Validity;
 

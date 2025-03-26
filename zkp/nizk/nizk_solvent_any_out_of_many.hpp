@@ -10,7 +10,7 @@ this hpp implements many_out_of_many proof and adopts the aadcp
 #include "../bulletproofs/innerproduct_proof.hpp" 
 #include <utility>
 #include <iostream>
-#define DEBUG
+// #define DEBUG
 //!!!!!!!!!!!!!!!! if you want to invoke the Bulletproofs, must note taux and tx's order ! The order is reversed !!
 
 namespace Solvent4UTXO{
@@ -224,8 +224,11 @@ void Prove(PP &pp,Instance &instance, Witness &witness, Proof &proof , std::stri
 
     // compute r(X)     
     std::vector<BigInt> poly_rr0 = BigIntVectorModAdd(vec_aR, vec_z_unary, BigInt(order)); // aR + z1^n
-    // std::vector<BigInt> vec_zz_temp_y_inverse = BigIntVectorModScalar(vec_y_inverse_power, z_square, BigInt(order));
-    // poly_rr0 = BigIntVectorModAdd(poly_rr0, vec_zz_temp_y_inverse, BigInt(order)); // aR + z1^n + z^2 y^{-i+1}
+    std::vector<BigInt> vec_short_2_power = GenBigIntPowerVector(LEN, bn_2); // 2^n
+
+    std::vector<BigInt> vec_zz_temp_y_inverse = BigIntVectorModScalar(vec_y_inverse_power, z_square, BigInt(order));
+    std::vector<BigInt> vec_zz_temp_y_inverse_pow = BigIntVectorModProduct(vec_zz_temp_y_inverse, vec_short_2_power, BigInt(order));
+    poly_rr0 = BigIntVectorModAdd(poly_rr0, vec_zz_temp_y_inverse_pow, BigInt(order)); // aR + z1^n + z^2 y^{-i+1}
     
     std::vector<BigInt> poly_rr1(LEN);
     poly_rr1.assign(vec_sR.begin(), vec_sR.end());
@@ -270,7 +273,7 @@ void Prove(PP &pp,Instance &instance, Witness &witness, Proof &proof , std::stri
     proof.E = proof.E + ECPointVectorMul(instance.CoinInput, vec_sL); // E = E + C^{r0} 
 
     // compute taux
-    proof.taux = (tau1 * x + tau2 * x_square) % order; //proof.taux = tau2*x_square + tau1*x; 
+    proof.taux = (tau1 * x + tau2 * x_square + z_square * witness.r) % order; //proof.taux = tau2*x_square + tau1*x; 
 
     // compute proof.mu = (alpha + beta*x) %q;  
     proof.mu = (alpha + beta * x) % order; 
@@ -395,23 +398,28 @@ bool Verify(PP &pp, Instance &instance, Proof &proof, std::string &transcript_st
     sum_z = (sum_z * z) % order;  
 
     // compute delta_yz 
+    std::vector<BigInt> vec_short_2_power = GenBigIntPowerVector(LEN, bn_2); // 2^n
     BigInt bn_temp1 = BigIntVectorModInnerProduct(vec_1_power, vec_y_power, BigInt(order)); 
     BigInt bn_c0 = z.ModSub(z_square, order); // z
     bn_temp1 = bn_c0 * bn_temp1 % order; 
-    //BigInt delta_yz = bn_temp1 - z_cubic * BigInt(LEN) % order; 
-    BigInt delta_yz = (bn_temp1 + order)  % order;
+    BigInt delta_yz = bn_temp1 - z_cubic * BigIntVectorModInnerProduct(vec_1_power,vec_short_2_power,order) % order; 
+    //BigInt delta_yz = (bn_temp1 + order)  % order;
 
     // check  
     ECPoint LEFT = pp.h * proof.tx + pp.g * proof.taux;  // LEFT = g^{\taux} h^\hat{t}
 
-    std::vector<ECPoint> vec_A(3);
-    std::vector<BigInt> vec_a(3);
-    vec_A[0] = pp.h, vec_A[1] = proof.T1, vec_A[2] = proof.T2;
-    vec_a[0] = delta_yz, vec_a[1] = x, vec_a[2] = x_square;
+    std::vector<ECPoint> vec_A(4);
+    std::vector<BigInt> vec_a(4);
+    vec_A[0] = pp.h, vec_A[1] = proof.T1, vec_A[2] = proof.T2, vec_A[3] = instance.Com;
+    vec_a[0] = delta_yz, vec_a[1] = x, vec_a[2] = x_square, vec_a[3] = z_square;
 
     ECPoint RIGHT = ECPointVectorMul(vec_A, vec_a);  // RIGHT =  g^{\delta_yz} T_1^x T_2^{x^2} 
 
     vec_condition[0] = (LEFT == RIGHT); 
+
+    std::vector<BigInt> vec_y_inverse_power = GenBigIntPowerVector(LEN, y_inverse); // y^nm
+    std::vector<BigInt> vec_zz_2_power = BigIntVectorModScalar(vec_short_2_power, z_square, BigInt(order));
+    std::vector<BigInt> vec_zz_2_power_y_inverse = BigIntVectorModProduct(vec_zz_2_power, vec_y_inverse_power, BigInt(order));
 
     // using Inner Product Argument
     InnerProduct::PP ip_pp = InnerProduct::Setup(LEN, false); 
@@ -421,7 +429,7 @@ bool Verify(PP &pp, Instance &instance, Proof &proof, std::string &transcript_st
 
     ip_pp.vec_h.resize(LEN); 
     std::copy(pp.vec_h.begin(), pp.vec_h.begin()+LEN, ip_pp.vec_h.begin()); 
-    std::vector<BigInt> vec_y_inverse_power = GenBigIntPowerVector(LEN, y_inverse); // y^n
+    //std::vector<BigInt> vec_y_inverse_power = GenBigIntPowerVector(LEN, y_inverse); // y^n
     std::vector<ECPoint> com_new(LEN);
     std::vector<ECPoint> vec_g_new(LEN);
     
@@ -474,7 +482,8 @@ bool Verify(PP &pp, Instance &instance, Proof &proof, std::string &transcript_st
         sum_output = sum_output + instance.CoinOutput[i];
     }
     ip_instance.P = ECPointVectorMul(vec_A, vec_a);  // set P_new = A + S^x + h^{-mu} u^tx  
-    ip_instance.P = ip_instance.P + ip_pp.u * proof.tx + sum_output; // P_new = P_new + E
+    ECPoint oplus = ECPointVectorMul(pp.vec_h, vec_zz_2_power_y_inverse);
+    ip_instance.P = ip_instance.P + ip_pp.u * proof.tx + sum_output + oplus; // P_new = P_new + E
     
     vec_condition[1] = InnerProduct::Verify(ip_pp, ip_instance, transcript_str, proof.ip_proof); 
 

@@ -830,4 +830,20 @@ std::vector<BigInt> GenRandomBigIntVectorLessThan(size_t LEN, const BigInt &modu
     return vec_result; 
 }
 
+BigInt FromBitVector(const std::vector<BigInt>& bit_vector) {
+    BigInt result = bn_0; // Initialize result to 0
+    BigInt base = bn_1;   // Base starts at 2^0 = 1
+
+    for (size_t i = 0; i < bit_vector.size(); ++i) {
+        if (bit_vector[i] == bn_1) {
+            result += base; // Add 2^i if the bit is set
+        }
+        base = base * bn_2; // Update base to 2^(i+1)
+    }
+
+    return result;
+}
+
+
+
 #endif  // KUNLUN_CRYPTO_BIGINT_HPP_

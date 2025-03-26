@@ -1,6 +1,6 @@
 #include "../sdpt/sdpt_UTXO.hpp"
 #include "../crypto/setup.hpp"
-#define DEBUG
+//#define DEBUG
 // count the number of transaction
 BigInt count=bn_0;
 void Build_SDPT_Test_Enviroment(size_t ringnumber, size_t num_receiver)
@@ -205,19 +205,35 @@ void Emulate_SDPT_System(size_t ringnumber, size_t num_sender, size_t num_receiv
     //SDPT_UTXO::PrintAccount(Acct_Tax); 
 
 
-    std::cout << "begin to the test of 1-to-1 anonymous tx" << std::endl;
-    PrintSplitLine('-'); 
+    // std::cout << "begin to the test of 1-to-1 anonymous tx" << std::endl;
+    // PrintSplitLine('-'); 
 
-    std::cout << "case 1: 1st valid 1-to-1 anonymous tx" << std::endl;
+    // std::cout << "case 1: 1st valid 1-to-1 anonymous tx" << std::endl;
 
     std::vector<SDPT_UTXO::Coin> AnonSetList;
     // std::cout << "Alice is going to transfer " << BN_bn2dec(v.bn_ptr) << " coins to Bob" << std::endl;
     
     //std::string namelist[9]={Acct_Alice,Acct_Bob,Acct_Carl,Acct_David,Acct_Eve,Acct_Frank,Acct_Grace,Acct_Henry,Acct_Tax};
+    // std::vector<SDPT_UTXO::Account> acountlist{Acct_Alice, Acct_Bob, Acct_Carl, Acct_David,
+    //                             Acct_Eve, Acct_Frank, Acct_Grace, Acct_Henry,
+    //                             Acct_Ida, Acct_Jack, Acct_Kate, Acct_Leo, Acct_Mary,
+    //                             Acct_Nick, Acct_Olivia, Acct_Paul, Acct_Tax};
+                                
     std::vector<SDPT_UTXO::Account> acountlist{Acct_Alice, Acct_Bob, Acct_Carl, Acct_David,
                                 Acct_Eve, Acct_Frank, Acct_Grace, Acct_Henry,
                                 Acct_Ida, Acct_Jack, Acct_Kate, Acct_Leo, Acct_Mary,
-                                Acct_Nick, Acct_Olivia, Acct_Paul, Acct_Tax};
+                                Acct_Nick, Acct_Olivia, Acct_Paul};
+    
+    //create 32 accounts additioanlly
+    //size_t numadd_account = std::max(size_t(32),ringnumber);
+    for(auto i = 16; i < ringnumber; i++)
+    {
+        BigInt account_balance = BigInt(32); 
+        SDPT_UTXO::Account Acct = SDPT_UTXO::CreateAccount(pp, "Account" + std::to_string(i), account_balance); 
+        std::string Acct_FileName = "Account" + std::to_string(i) + ".account"; 
+        SDPT_UTXO::SaveAccount(Acct, Acct_FileName); 
+        acountlist.push_back(Acct);
+    }
 
     std::set<size_t> senderindex;
     for(auto i = 0; ; i++)
@@ -237,16 +253,18 @@ void Emulate_SDPT_System(size_t ringnumber, size_t num_sender, size_t num_receiv
     std::vector<SDPT_UTXO::Account> senderlist;
     size_t j = 0;
     AnonSetList.resize(ringnumber);
-    std::vector<BigInt> v ;
+    std::vector<BigInt> v(num_receiver) ;
     std::vector<BigInt> sk_sender;
     std::vector<BigInt> vec_b(ringnumber);
+    BigInt v_sum = bn_0;
     for(auto i = 0; i < ringnumber; i++)
     {
         if(senderindex.find(i) != senderindex.end())
         {
             senderlist.push_back(acountlist[i]); 
             sk_sender.push_back(acountlist[i].sk);
-            v.push_back(acountlist[i].m);
+            v_sum = v_sum + acountlist[i].m;
+            //v.push_back(acountlist[i].m);
             vec_b[i] = bn_1;
         }
         else
@@ -256,6 +274,12 @@ void Emulate_SDPT_System(size_t ringnumber, size_t num_sender, size_t num_receiv
         AnonSetList[i].pk = acountlist[i].pk;
         AnonSetList[i].coin_tx = acountlist[i].coin_ct;
     }
+    BigInt v_avg = v_sum.DivAndTruncate(num_receiver) ;
+    for(auto i = 0; i < num_receiver-1; i++)
+    {
+        v[i] = v_avg;
+    }
+    v[num_receiver-1] = v_sum - v_avg*(num_receiver-1);
     PrintBigIntVector(vec_b, "vec_b");
     std::vector<ECPoint> pk_receiver(num_receiver);
     //generate the  random receiver pk
@@ -263,16 +287,16 @@ void Emulate_SDPT_System(size_t ringnumber, size_t num_sender, size_t num_receiv
     {
        std::tie(pk_receiver[i], std::ignore) = TwistedExponentialElGamal::KeyGen(pp.enc_part);
     }
-    std::cout << "begin to create anonymous transaction" << std::endl;
+    //std::cout << "begin to create anonymous transaction" << std::endl;
     SDPT_UTXO::AnonTransaction anon_transaction = SDPT_UTXO::CreateAnonTransaction(pp, senderlist, v, pk_receiver, AnonSetList, sk_sender, count);
    
-    std::cout << "begin to mine" << std::endl;
+    //std::cout << "begin to mine" << std::endl;
     SDPT_UTXO::Miner(pp, anon_transaction);
-    PrintSplitLine('-');
+    //PrintSplitLine('-');
 
-    std::cout << "begin to supervise" << std::endl;
+    //std::cout << "begin to supervise" << std::endl;
     SDPT_UTXO::SuperviseAnonTx(sp, pp, anon_transaction);
-    PrintSplitLine('-');
+    //PrintSplitLine('-');
 }
 
 int main()
@@ -280,8 +304,8 @@ int main()
     CRYPTO_Initialize();  
     // the ringnumber = the participants in the transaction, now we support the maximum >=2, had better set the ringnumber= 2^n
     //we only test the maximum=64, if set ringnumber >64, maybe is is also ok
-    size_t ringnumber=8;
-    size_t num_sender=2;
+    size_t ringnumber=64;
+    size_t num_sender=3;
     size_t num_receiver=2;
     Build_SDPT_Test_Enviroment(ringnumber,num_receiver); 
     Emulate_SDPT_System(ringnumber, num_sender, num_receiver);

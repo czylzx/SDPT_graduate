@@ -119,7 +119,7 @@ void Build_SDPT_Test_Enviroment(size_t ringnumber)
     std::string Tax_Acct_FileName = "Tax.account"; 
     SDPT::SaveAccount(Acct_Tax, Tax_Acct_FileName); 
 
-    std::cout << "press any key to continue >>>" << std::endl; 
+    //std::cout << "press any key to continue >>>" << std::endl; 
     system ("read");
 } 
 
@@ -204,13 +204,13 @@ void Emulate_SDPT_System(size_t ringnumber)
     //SDPT::PrintAccount(Acct_Tax); 
 
 
-    std::cout << "begin to the test of 1-to-1 anonymous tx" << std::endl;
+    //std::cout << "begin to the test of 1-to-1 anonymous tx" << std::endl;
     PrintSplitLine('-'); 
     BigInt v;
-    std::cout << "case 1: 1st valid 1-to-1 anonymous tx" << std::endl;
+    //std::cout << "case 1: 1st valid 1-to-1 anonymous tx" << std::endl;
     v = BigInt(32);
     std::vector<SDPT::AnonSet> AnonSetList;
-    std::cout << "Alice is going to transfer " << BN_bn2dec(v.bn_ptr) << " coins to Bob" << std::endl;
+    //std::cout << "Alice is going to transfer " << BN_bn2dec(v.bn_ptr) << " coins to Bob" << std::endl;
     
     //std::string namelist[9]={Acct_Alice,Acct_Bob,Acct_Carl,Acct_David,Acct_Eve,Acct_Frank,Acct_Grace,Acct_Henry,Acct_Tax};
     std::vector<SDPT::Account> acountlist{Acct_Alice, Acct_Bob, Acct_Carl, Acct_David,
@@ -299,17 +299,17 @@ void Emulate_SDPT_System(size_t ringnumber)
         }
     }
     
-    std::cout << "senderindex:" << senderindex << std::endl;
-    std::cout << "receiverindex:" << receiverindex << std::endl;
+    //std::cout << "senderindex:" << senderindex << std::endl;
+    //std::cout << "receiverindex:" << receiverindex << std::endl;
     count = count + bn_1;   
-    std::cout << "CreateAnoyTransaction " << std::endl;
+    //std::cout << "CreateAnoyTransaction " << std::endl;
     SDPT::AnonTransaction1 anon_transaction1 = SDPT::CreateAnonTransaction1(pp, Acct_Alice, 
                                                 v, AnonSetList, Acct_Bob.pk, count, senderindex, receiverindex);
     
     
     SDPT::AnonTransaction2 anon_transaction2 = SDPT::CreateAnonTransaction2(pp, Acct_Alice, 
                                                 v,AnonSetList, Acct_Bob.pk, count,senderindex,receiverindex);
-    std::cout << "begin to mine" << std::endl;
+    //std::cout << "begin to mine" << std::endl;
     std::vector<SDPT::Account> AccountList_miner(ringnumber);
     std::copy(acountlist.begin(), acountlist.begin()+ringnumber, AccountList_miner.begin());
     if(senderindex == receiver_acc_index && receiverindex == sender_acc_index)
@@ -337,30 +337,30 @@ void Emulate_SDPT_System(size_t ringnumber)
         }        
     }
     
-    std::cout << "AccountList_miner.size():" << AccountList_miner.size() << std::endl;
+    //std::cout << "AccountList_miner.size():" << AccountList_miner.size() << std::endl;
     SDPT::Miner1(pp, anon_transaction1, AccountList_miner); 
     SDPT::Miner2(pp, anon_transaction2, AccountList_miner);
     PrintSplitLine('-');
 
-    std::cout << "after 1st valid 1-to-1 anonymous tx >>>>>>" << std::endl; 
+    //std::cout << "after 1st valid 1-to-1 anonymous tx >>>>>>" << std::endl; 
     PrintSplitLine('-'); 
 
-    std::cout << "press any key to continue >>>" << std::endl; 
+    //std::cout << "press any key to continue >>>" << std::endl; 
     system ("read");
 
-    std::cout << "supervision1 of 1-to-1 anonymous tx begins >>>" << std::endl; 
+    //std::cout << "supervision1 of 1-to-1 anonymous tx begins >>>" << std::endl; 
     PrintSplitLine('-'); 
     SDPT::SuperviseAnonTx1(sp, pp,anon_transaction1);  
-    std::cout << "supervision1 of 1-to-1 anonymous tx ends >>>" << std::endl; 
+    //std::cout << "supervision1 of 1-to-1 anonymous tx ends >>>" << std::endl; 
     PrintSplitLine('-');
 
-    std::cout << "press any key to continue >>>" << std::endl;
+    //std::cout << "press any key to continue >>>" << std::endl;
     system ("read");
 
-    std::cout << "supervision2 of 1-to-1 anonymous tx begins >>>" << std::endl; 
+    //std::cout << "supervision2 of 1-to-1 anonymous tx begins >>>" << std::endl; 
     PrintSplitLine('-'); 
     SDPT::SuperviseAnonTx2(sp, pp,anon_transaction2);  
-    std::cout << "supervision2 of 1-to-1 anonymous tx ends >>>" << std::endl; 
+    //std::cout << "supervision2 of 1-to-1 anonymous tx ends >>>" << std::endl; 
     PrintSplitLine('-');
 
 }
@@ -370,7 +370,7 @@ int main()
     CRYPTO_Initialize();  
     // the ringnumber = the participants in the transaction, now we support the maximum >=2, had better set the ringnumber= 2^n
     //we only test the maximum=64, if set ringnumber >64, maybe is is also ok
-    size_t ringnumber=8;
+    size_t ringnumber=64;
     Build_SDPT_Test_Enviroment(ringnumber); 
     Emulate_SDPT_System(ringnumber);
     CRYPTO_Finalize(); 
